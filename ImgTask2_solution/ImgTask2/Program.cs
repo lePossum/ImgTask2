@@ -54,6 +54,46 @@ namespace ImgTask2
             return out_img;
         }
 
+        static ColorFloatImage sobel(ColorFloatImage image, String mode, String axis)
+        {
+            int x_flag = 0, y_flag = 0;
+            if (axis == "x")
+            {
+                x_flag = 1;
+            }
+            else if (axis == "y")
+            {
+                y_flag = 1;
+            }
+            else
+            {
+                Console.WriteLine("Wrong axis in Sobel filter");
+                return image;
+            }
+
+            if (mode != "rep" && mode != "odd" && mode != "even")
+            {
+                Console.WriteLine("Wrong edge mode");
+                return image;
+            }
+
+            int rad = 1;
+            ColorFloatImage test_image = img_expansion(image, mode, rad);
+            ColorFloatImage out_img = new ColorFloatImage(image.Width, image.Height);
+            for (int y = rad; y < out_img.Height + rad; y++)
+            {
+                for (int x = rad; x < out_img.Width + rad; x++)
+                {
+                    out_img[x - rad, y - rad] = x_flag * ((-1) * (test_image[x - 1, y - 1] + test_image[x + 1, y - 1]) + (-2) * test_image[x, y - 1] +
+                        test_image[x - 1, y + 1] + test_image[x + 1, y + 1] + 2 * test_image[x, y + 1]) +
+                        y_flag * ((-1) * (test_image[x - 1, y - 1] + test_image[x - 1, y + 1]) + (-2) * test_image[x - 1, y] +
+                        test_image[x + 1, y - 1] + test_image[x + 1, y + 1] + 2 * test_image[x + 1, y]) + 128;
+                }
+            }
+
+            return out_img;
+        }
+
         static ColorFloatImage gauss(ColorFloatImage image, String mode, float sigma)
         {
             if (mode != "rep" && mode != "odd" && mode != "even")
@@ -180,7 +220,7 @@ namespace ImgTask2
             return common_SSIM / ((x_amount - REG_COEF) * (y_amount - REG_COEF));
         }
 
-        static ColorFloatImage gradient(ColorFloatImage image, String mode, float sigma)
+        static ColorFloatImage gradient(ColorFloatImage image, String mode)
         {
             if (mode != "rep" && mode != "odd" && mode != "even")
             {
@@ -188,8 +228,7 @@ namespace ImgTask2
                 return image;
             }
 
-            ColorFloatImage temp_image = gauss(image, mode, sigma);
-            temp_image = img_expansion(temp_image, mode, 1);
+            ColorFloatImage temp_image = img_expansion(image, mode, 1);
 
             ColorFloatImage temp_image_x = new ColorFloatImage(image.Width, image.Height);
             ColorFloatImage temp_image_y = new ColorFloatImage(image.Width, image.Height);
@@ -241,20 +280,20 @@ namespace ImgTask2
             return out_img;
         }
 
-        static GrayscaleFloatImage dir(ColorFloatImage image, float sigma)
+        static GrayscaleFloatImage dir(ColorFloatImage image)
         {
-            ColorFloatImage temp_image = gauss(image, "even", sigma);
-            temp_image = img_expansion(temp_image, "even", 1);
-
+            string mode = "even"; 
+            ColorFloatImage temp_image = img_expansion(image, mode, 1);
+            
             ColorFloatImage temp_image_x = new ColorFloatImage(image.Width, image.Height);
             ColorFloatImage temp_image_y = new ColorFloatImage(image.Width, image.Height);
 
-            for (int y = 0; y < temp_image_x.Height; y++)
-                for (int x = 0; x < temp_image_x.Width; x++)
-                    temp_image_x[x, y] = temp_image[x + 1, y] + (-1) * temp_image[x, y];
-            for (int y = 0; y < temp_image_y.Height; y++)
-                for (int x = 0; x < temp_image_y.Width; x++)
-                    temp_image_y[x, y] = temp_image[x, y + 1] + (-1) * temp_image[x, y];
+            for (int y = 1; y < temp_image_x.Height + 1; y++)
+                for (int x = 1; x < temp_image_x.Width + 1; x++)
+                    temp_image_x[x - 1, y - 1] = temp_image[x + 1, y] + (-1) * temp_image[x, y];
+            for (int y = 1; y < temp_image_y.Height + 1; y++)
+                for (int x = 1; x < temp_image_y.Width + 1; x++)
+                    temp_image_y[x - 1, y - 1] = temp_image[x, y + 1] + (-1) * temp_image[x, y];
 
             GrayscaleFloatImage out_img = new GrayscaleFloatImage(image.Width, image.Height);
             GrayscaleFloatImage x_grad = temp_image_x.ToGrayscaleFloatImage();
@@ -268,28 +307,248 @@ namespace ImgTask2
                     }
                     double theta = Math.Atan2(y_grad[x, y], x_grad[x, y]) * (180 / Math.PI);
                     if (theta <= 22.5 && theta > -22.5 || theta <= -157.5 && theta > 157.5)
-                        out_img[x, y] = 64;
+                        out_img[x, y] = 64; // ->
                     else if (theta <= 67.5 && theta > 22.5 || theta >= -157.5 && theta < -112.5)
-                    {
-                        out_img[x, y] = 255;
-                    }
+                        out_img[x, y] = 192; // /
                     else if (theta > 67.5 && theta <= 112.5 || theta >= -112.5 && theta < -67.5)
-                        out_img[x, y] = 128;
+                        out_img[x, y] = 128; // ^
                     else if (theta > 112.5 && theta <= 157.5 || theta >= -67.5 && theta < -22.5)
-                        out_img[x, y] = 192;
+                        out_img[x, y] = 255; // \
                 }
+            return out_img;
+        }
+        
+        static GrayscaleFloatImage nonmax(ColorFloatImage image)
+        {
+            int offset = 2;
+            string mode = "even";
+
+            ColorFloatImage temp_image = img_expansion(image, mode, offset);
+            temp_image = gradient(image, mode);
+            temp_image = img_expansion(temp_image, mode, offset);
+
+            GrayscaleFloatImage gray_grad = temp_image.ToGrayscaleFloatImage();
+            GrayscaleFloatImage dir_img = dir(image);
+            GrayscaleFloatImage out_img = new GrayscaleFloatImage(image.Width, image.Height);
+            float max_value = 0;
+
+            for (int y = 0; y < out_img.Height; y++)
+                for (int x = 0; x < out_img.Width; x++)
+                {
+                    float M = gray_grad[x + offset, y + offset];
+                    if (M > max_value)
+                        max_value = M;
+                    switch (dir_img[x, y])
+                    {
+                        case 0: // o
+                            break;
+                        case 64: // ->
+                            if (M < gray_grad[x + offset + 1, y + offset] ||
+                                M < gray_grad[x + offset - 1, y + offset])
+                                out_img[x, y] = 0;
+                            else
+                                out_img[x, y] = M;
+                            break;
+                        case 128: // ^
+                            if (M < gray_grad[x + offset, y + offset + 1] ||
+                                M < gray_grad[x + offset, y + offset - 1])
+                                out_img[x, y] = 0;
+                            else
+                                out_img[x, y] = M;
+                            break;
+                        case 192: // /
+                            if (M < gray_grad[x + offset + 1, y + offset + 1] ||
+                                M < gray_grad[x + offset - 1, y + offset - 1])
+                                out_img[x, y] = 0;
+                            else
+                                out_img[x, y] = M;
+                            break;
+                        case 255: // \
+                            if (M < gray_grad[x + offset - 1, y + offset + 1] ||
+                                M < gray_grad[x + offset + 1, y + offset - 1])
+                                out_img[x, y] = 0;
+                            else
+                                out_img[x, y] = M;
+                            break;
+                    }
+                }
+            float mult = 255 / max_value;
+            for (int y = 0; y < out_img.Height; y++)
+                for (int x = 0; x < out_img.Width; x++)
+                    out_img[x, y] *= mult;
+            return out_img;
+        }
+
+        static GrayscaleFloatImage canny(ColorFloatImage image, int thr_high, int thr_low)
+        {
+            int MAX = 255;
+            GrayscaleFloatImage temp_img = nonmax(image);
+
+            float max_value = 0;
+            for (int y = 0; y < temp_img.Height; y++)
+                for (int x = 0; x < temp_img.Width; x++)
+                    if (temp_img[x, y] > max_value)
+                        max_value = temp_img[x, y];
+
+            float high_value = max_value * thr_high / 1000;
+            float low_value = max_value * thr_low / 1000;
+            GrayscaleFloatImage out_img = new GrayscaleFloatImage(image.Width, image.Height);
+            bool[,] visited_pixels = new bool[image.Width, image.Height];
+
+            for (int y = 0; y < temp_img.Height; y++)
+                for (int x = 0; x < temp_img.Width; x++)
+                    if (temp_img[x, y] < low_value)
+                    {
+                        visited_pixels[x, y] = true;
+                        out_img[x, y] = 0;
+                    }
+                    else if (temp_img[x, y] > high_value)
+                    {
+                        visited_pixels[x, y] = true;
+                        out_img[x, y] = MAX;
+                    }
+            
+            GrayscaleFloatImage dir_img = dir(image);
+            List<Tuple<int, int>> pixels_list = new List<Tuple<int, int>>();
+            for (int coord_y = 0; coord_y < temp_img.Height; coord_y++)
+                for (int coord_x = 0; coord_x < temp_img.Width; coord_x++)
+                {
+                    bool flag = true;
+                    int x1 = coord_x, x2 = coord_x;
+                    int y1 = coord_y, y2 = coord_y;
+                    while (flag)
+                    {
+                        if (!visited_pixels[x1, y1] || !visited_pixels[x2, y2])
+                        {
+                            visited_pixels[x1, y1] = true;
+                            visited_pixels[x2, y2] = true;
+                            Tuple<int, int> a = new Tuple<int, int>(x1, y1);
+                            Tuple<int, int> b = new Tuple<int, int>(x2, y2);
+                            pixels_list.Add(a);
+                            pixels_list.Add(b);
+                            switch (dir_img[x1, y1])
+                            {
+                                case 0: // o
+                                    break;
+                                case 64: // ->
+                                    if (x1 < temp_img.Width - 1)
+                                        x1++;
+                                    break;
+                                case 128: // ^
+                                    if (y1 < temp_img.Height - 1)
+                                        y1++;
+                                    break;
+                                case 192: // /
+                                    if (x1 < temp_img.Width - 1)
+                                        x1++;
+                                    if (y1 < temp_img.Height - 1)
+                                        y1++;
+                                    break;
+                                case 255: // \
+                                    if (x1 > 0)
+                                        x1--;
+                                    if (y1 < temp_img.Height - 1)
+                                        y1++;
+                                    break;
+                            }
+                            switch (dir_img[x2, y2])
+                            {
+                                case 0: // o
+                                    break;
+                                case 64: // ->
+                                    if (x2 > 0)
+                                        x2--;
+                                    break;
+                                case 128: // ^
+                                    if (y2 > 0)
+                                        y2--;
+                                    break;
+                                case 192: // /
+                                    if (x2 > 0)
+                                        x2--;
+                                    if (y2 > 0)
+                                        y2--;
+                                    break;
+                                case 255: // \
+                                    if (x2 < temp_img.Width - 1)
+                                        x2++;
+                                    if (y2 > 0)
+                                        y2--;
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            flag = false;
+                            visited_pixels[x1, y1] = true;
+                            visited_pixels[x2, y2] = true;
+                            if (out_img[x1, y1] == MAX || out_img[x2, y2] == MAX)
+                            {
+                                foreach (var a in pixels_list)
+                                    out_img[a.Item1, a.Item2] = MAX;
+                                pixels_list = new List<Tuple<int, int>>();
+                            }
+                            else
+                            {
+                                foreach (var a in pixels_list)
+                                    out_img[a.Item1, a.Item2] = 0;
+                                pixels_list = new List<Tuple<int, int>>();
+                            }
+                        }
+                    }
+                }
+                
             return out_img;
         }
 
         static void Main(string[] args)
         {
-            GrayscaleFloatImage image1 = ImageIO.FileToGrayscaleFloatImage(args[0]);
-            GrayscaleFloatImage image2 = ImageIO.FileToGrayscaleFloatImage(args[1]);
-            ColorFloatImage image = ImageIO.FileToColorFloatImage(args[0]);
-            GrayscaleFloatImage output_image = dir(image, (float)1.4);
-            ImageIO.ImageToFile(output_image, args[1]);
-            Console.WriteLine("Image transformed (or not)");
-            Console.ReadKey();
+            GrayscaleFloatImage output_image = null;
+            if (args[0] == "mse")
+            {
+                GrayscaleFloatImage image = ImageIO.FileToGrayscaleFloatImage(args[1]);
+                GrayscaleFloatImage image1 = ImageIO.FileToGrayscaleFloatImage(args[2]);
+                Console.WriteLine(MSE(image, image1));
+            }
+            else if (args[0] == "psnr")
+            {
+                GrayscaleFloatImage image = ImageIO.FileToGrayscaleFloatImage(args[1]);
+                GrayscaleFloatImage image1 = ImageIO.FileToGrayscaleFloatImage(args[2]);
+                Console.WriteLine(PSNR(image, image1));
+            }
+            else if (args[0] == "ssim")
+            {
+                GrayscaleFloatImage image = ImageIO.FileToGrayscaleFloatImage(args[1]);
+                GrayscaleFloatImage image1 = ImageIO.FileToGrayscaleFloatImage(args[2]);
+                Console.WriteLine(SSIM(image, image1));
+            }
+            else if (args[0] == "mssim")
+            {
+                GrayscaleFloatImage image = ImageIO.FileToGrayscaleFloatImage(args[1]);
+                GrayscaleFloatImage image1 = ImageIO.FileToGrayscaleFloatImage(args[2]);
+                Console.WriteLine(MSSIM(image, image1));
+            }
+            else if (args[0] == "dir")
+            {
+                ColorFloatImage image = ImageIO.FileToColorFloatImage(args[2]);
+                image = gauss(image, "even", (float)Convert.ToDouble(args[1]));
+                output_image = dir(image);
+                ImageIO.ImageToFile(output_image, args[3]);
+            }
+            else if (args[0] == "nonmax")
+            {
+                ColorFloatImage image = ImageIO.FileToColorFloatImage(args[2]);
+                image = gauss(image, "even", (float)Convert.ToDouble(args[1]));
+                output_image = nonmax(image);
+                ImageIO.ImageToFile(output_image, args[3]);
+            }
+            else if (args[0] == "canny")
+            {
+                ColorFloatImage image = ImageIO.FileToColorFloatImage(args[4]);
+                image = gauss(image, "even", (float)Convert.ToDouble(args[1]));
+                output_image = canny(image, Convert.ToInt32(args[2]), Convert.ToInt32(args[3]));
+                ImageIO.ImageToFile(output_image, args[5]);
+            }
         }
     }
 }
