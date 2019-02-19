@@ -300,9 +300,9 @@ namespace ImgTask2
             GrayscaleFloatImage y_grad = temp_image_y.ToGrayscaleFloatImage();
             for (int y = 0; y < y_grad.Height; y++)
                 for (int x = 0; x < x_grad.Width; x++) {
-                    if (x_grad[x, y] == 0)
+                    if (x_grad[x, y] == 0 && y_grad[x,y] != 0)
                     {
-                        out_img[x, y] = 0;
+                        out_img[x, y] = 64;
                         continue;
                     }
                     double theta = Math.Atan2(y_grad[x, y], x_grad[x, y]) * (180 / Math.PI);
@@ -341,7 +341,7 @@ namespace ImgTask2
                     switch (dir_img[x, y])
                     {
                         case 0: // o
-                            break;
+                            //break;
                         case 64: // ->
                             if (M < gray_grad[x + offset + 1, y + offset] ||
                                 M < gray_grad[x + offset - 1, y + offset])
@@ -379,6 +379,65 @@ namespace ImgTask2
             return out_img;
         }
 
+        //recursive(coord_x, coord_y, visited_pixels, pixels_list, dir_img, temp_img);
+        static bool recursive(int x, int y, bool [,] vst, List<Tuple<int, int>> pxl_l, 
+                              GrayscaleFloatImage dir_img, GrayscaleFloatImage nonmax_img, 
+                              GrayscaleFloatImage out_img, ref bool white)
+        {
+            if (!vst[x, y])
+            {
+                bool a, b;
+                pxl_l.Add(new Tuple<int, int>(x, y));
+                vst[x, y] = true;
+                switch (dir_img[x, y])
+                {
+                    case 0: // o
+                    case 64: // ->
+                        if (x < nonmax_img.Width - 1 && x > 0)
+                        {
+                            a = recursive(x + 1, y, vst, pxl_l, dir_img, nonmax_img, out_img, ref white);
+                            b = recursive(x - 1, y, vst, pxl_l, dir_img, nonmax_img, out_img, ref white);
+                            white = a || b;
+                        }
+                        break;
+                    case 128: // ^
+                        if (y < nonmax_img.Height - 1 && y > 0)
+                        {
+                            a = recursive(x, y + 1, vst, pxl_l, dir_img, nonmax_img, out_img, ref white);
+                            b = recursive(x, y - 1, vst, pxl_l, dir_img, nonmax_img, out_img, ref white);
+                            white = a || b;
+                        }
+                        break;
+                    case 192: // /
+                        if (x < nonmax_img.Width - 1 && x > 0 && 
+                            y < nonmax_img.Height - 1 && y > 0)
+                        {
+                            a = recursive(x + 1, y + 1, vst, pxl_l, dir_img, nonmax_img, out_img, ref white);
+                            b = recursive(x - 1, y - 1, vst, pxl_l, dir_img, nonmax_img, out_img, ref white);
+                            white = a || b;
+                        }
+                        break;
+                    case 255: // \
+                        if (x < nonmax_img.Width - 1 && x > 0 &&
+                            y < nonmax_img.Height - 1 && y > 0)
+                        {
+                            a = recursive(x - 1, y + 1, vst, pxl_l, dir_img, nonmax_img, out_img, ref white);
+                            b = recursive(x + 1, y - 1, vst, pxl_l, dir_img, nonmax_img, out_img, ref white);
+                            white = a || b;
+                        }
+                        break;
+                }
+                return false;
+            }
+            else
+            {
+                if (out_img[x, y] == 255)
+                    return true;
+                else
+                    return false;
+            }
+        }
+
         static GrayscaleFloatImage canny(ColorFloatImage image, int thr_high, int thr_low)
         {
             int MAX = 255;
@@ -413,92 +472,29 @@ namespace ImgTask2
             for (int coord_y = 0; coord_y < temp_img.Height; coord_y++)
                 for (int coord_x = 0; coord_x < temp_img.Width; coord_x++)
                 {
-                    bool flag = true;
-                    int x1 = coord_x, x2 = coord_x;
-                    int y1 = coord_y, y2 = coord_y;
-                    while (flag)
+                    bool flag = false;
+                    flag = recursive(coord_x, coord_y, visited_pixels, pixels_list, dir_img, temp_img, out_img, ref flag);
+                    if (flag)
                     {
-                        if (!visited_pixels[x1, y1] || !visited_pixels[x2, y2])
-                        {
-                            visited_pixels[x1, y1] = true;
-                            visited_pixels[x2, y2] = true;
-                            Tuple<int, int> a = new Tuple<int, int>(x1, y1);
-                            Tuple<int, int> b = new Tuple<int, int>(x2, y2);
-                            pixels_list.Add(a);
-                            pixels_list.Add(b);
-                            switch (dir_img[x1, y1])
-                            {
-                                case 0: // o
-                                    break;
-                                case 64: // ->
-                                    if (x1 < temp_img.Width - 1)
-                                        x1++;
-                                    break;
-                                case 128: // ^
-                                    if (y1 < temp_img.Height - 1)
-                                        y1++;
-                                    break;
-                                case 192: // /
-                                    if (x1 < temp_img.Width - 1)
-                                        x1++;
-                                    if (y1 < temp_img.Height - 1)
-                                        y1++;
-                                    break;
-                                case 255: // \
-                                    if (x1 > 0)
-                                        x1--;
-                                    if (y1 < temp_img.Height - 1)
-                                        y1++;
-                                    break;
-                            }
-                            switch (dir_img[x2, y2])
-                            {
-                                case 0: // o
-                                    break;
-                                case 64: // ->
-                                    if (x2 > 0)
-                                        x2--;
-                                    break;
-                                case 128: // ^
-                                    if (y2 > 0)
-                                        y2--;
-                                    break;
-                                case 192: // /
-                                    if (x2 > 0)
-                                        x2--;
-                                    if (y2 > 0)
-                                        y2--;
-                                    break;
-                                case 255: // \
-                                    if (x2 < temp_img.Width - 1)
-                                        x2++;
-                                    if (y2 > 0)
-                                        y2--;
-                                    break;
-                            }
-                        }
-                        else
-                        {
-                            flag = false;
-                            visited_pixels[x1, y1] = true;
-                            visited_pixels[x2, y2] = true;
-                            if (out_img[x1, y1] == MAX || out_img[x2, y2] == MAX)
-                            {
-                                foreach (var a in pixels_list)
-                                    out_img[a.Item1, a.Item2] = MAX;
-                                pixels_list = new List<Tuple<int, int>>();
-                            }
-                            else
-                            {
-                                foreach (var a in pixels_list)
-                                    out_img[a.Item1, a.Item2] = 0;
-                                pixels_list = new List<Tuple<int, int>>();
-                            }
-                        }
+                        foreach (var a in pixels_list)
+                            out_img[a.Item1, a.Item2] = 0;
+                        pixels_list = new List<Tuple<int, int>>();
+                    }
+                    else
+                    {
+                        foreach (var a in pixels_list)
+                            out_img[a.Item1, a.Item2] = MAX;
+                        pixels_list = new List<Tuple<int, int>>();
                     }
                 }
-                
             return out_img;
+        }
+
+        static void Main1(string[] args)
+        {
+            ColorFloatImage image = ImageIO.FileToColorFloatImage(args[2]);
+            ColorFloatImage output_image = gradient(image, "odd");
+            ImageIO.ImageToFile(output_image, args[3]);
         }
 
         static void Main(string[] args)
